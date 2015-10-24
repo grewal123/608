@@ -40,7 +40,7 @@ runQuery(query);
 return 0;
 }
 void runQuery(string query) {
-string createQuery,fieldQuery,dropQuery,insertQuery;
+string createQuery,fieldQuery,dropQuery,insertQuery,deleteQuery;
 cmatch attributes,fields;
 string tableName;
 
@@ -50,14 +50,15 @@ fieldQuery = "\\ *([a-zA-Z0-9]*)\\ *(int|str20)\\ *";
 regex fieldPattern(fieldQuery, regex_constants::icase);
 dropQuery = "^drop table ([a-zA-Z0-9]*)";
 regex dropPattern(dropQuery, regex_constants::icase);
-insertQuery = "^insert into ([a-zA-Z0-9]*)\\ *[(](([a-zA-Z0-9]*\\,*\\ *)*)[)]\\ *values\\ *[(](([a-zA-Z0-9]*\\,*\\ *)*|select .*)[)]";
+insertQuery = "^insert into ([a-zA-Z0-9]*)\\ *[(](([a-zA-Z0-9]*\\,*\\ *)*)[)]\\ *values\\ *[(]((.*)|select .*)[)]";
+//insertQuery = "^insert into ([a-zA-Z0-9]*)\\ *[(](([a-zA-Z0-9]*\\,*\\ *)*)[)]\\ *values\\ *[(](([[:alnum:], \"]*\\,*\\ *)*|select .*)[)]";
 regex insertPattern(insertQuery, regex_constants::icase);
-deleteQuery = "^delete from ([a-zA-Z0-9]*) where ";
+deleteQuery = "^delete from ([a-zA-Z0-9]*)\\ *(where (.*))";
+regex deletePattern(deleteQuery, regex_constants::icase);
 
 
 //create table statement
 if(regex_match(query.c_str(),attributes,createPattern)) {
-
 	tableName = attributes[1];
 	vector<string> data = split(attributes[2],',');
 	vector<string> fieldNames;
@@ -71,38 +72,28 @@ if(regex_match(query.c_str(),attributes,createPattern)) {
 
 		}
 		else {
-		cout<<"Invalid query1 "<<query<<endl;
-		return;
-//		return 0;
+			cout<<"Invalid query1 "<<query<<endl;
+			return;
 		}
 	}
-/*	for(it1 = fieldNames.begin(), it2=fieldTypes.begin();it1!=fieldNames.end();it1++,it2++){
-	
-		cout<<*it1<<":"<<*it2<<endl;
-	}*/
-	//call create function 
 	createTable(tableName, fieldNames, fieldTypes);
-
+	return;
 }
 
 //drop table statement
 else if(regex_match(query.c_str(),attributes,dropPattern)) {
 	tableName = attributes[1];
-	//cout<<"The table name is "<<tableName<<endl;
-	//call drop table function
 	dropTable(tableName);
-
+	return;
 }
 
 //insert into statement
 else if(regex_match(query.c_str(), attributes, insertPattern)) {
+	cout<<"insert statment"<<endl;
 	tableName = attributes[1];
 	string attributeList = attributes[2];
 	string valueList = attributes[4];
-/*	cout<<"Table Name: "<<tableName<<endl;
-	cout<<"Attribute List: "<<attributeList<<endl;
-	cout<<"Value List: "<<valueList<<endl; 
-	*///call insert into table function
+	vector<string>::iterator it;
 	//if(false) valueList == Select statement
 		//process select and the values to the fieldValues
       	vector<string> fieldNames = split(attributeList, ',');
@@ -110,14 +101,19 @@ else if(regex_match(query.c_str(), attributes, insertPattern)) {
 	if(fieldNames.size()!=fieldValues.size()) {
 		cout<<"invalid statement"<<query<<endl;
 		return;
-//		return 0;
 	}
 	insertIntoTable(tableName,fieldNames,fieldValues);
-
+	return;
 }
-else
-cout<<"Invalid query "<<query<<endl;
 
+//delete from statment
+else if(regex_match(query.c_str(),attributes,deletePattern)) {
+	tableName = attributes[1];
+	cout<<attributes[1]<<endl<<attributes[2]<<endl<<attributes[3]<<endl<<attributes[4]<<endl<<attributes[5]<<endl<<attributes[6]<<endl;
+}
+else {
+	cout<<"Invalid query "<<query<<endl;
+	return;
+}
 return;
-//return 0;
 }
