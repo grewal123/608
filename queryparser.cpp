@@ -12,13 +12,18 @@ extern void dropTable(string tableName);
 
 extern void insertIntoTable(string tableName, vector<string> fieldNames, vector<string> fieldValues);
 
+extern void deleteFromTable(string tableName);
+
+extern void selectFromTable(string tableName);
+
+
 vector<string> split(string str, char delimiter) {
   vector<string> internal;
-  stringstream ss(str); // Turn the string into a stream.
-  string tok;
+  stringstream ss(str); 
+  string token;
   
-  while(getline(ss, tok, delimiter)) {
-    internal.push_back(tok);
+  while(getline(ss, token, delimiter)) {
+    internal.push_back(token);
   }
   
   return internal;
@@ -40,7 +45,7 @@ runQuery(query);
 return 0;
 }
 void runQuery(string query) {
-string createQuery,fieldQuery,dropQuery,insertQuery,deleteQuery;
+string createQuery,fieldQuery,dropQuery,insertQuery,deleteQuery, selectQuery, selectQuery0, selectQuery1, selectQuery2, selectQuery3;
 cmatch attributes,fields;
 string tableName;
 
@@ -53,8 +58,20 @@ regex dropPattern(dropQuery, regex_constants::icase);
 insertQuery = "^insert into ([a-zA-Z0-9]*)\\ *[(](([a-zA-Z0-9]*\\,*\\ *)*)[)]\\ *values\\ *[(]((.*)|select .*)[)]";
 //insertQuery = "^insert into ([a-zA-Z0-9]*)\\ *[(](([a-zA-Z0-9]*\\,*\\ *)*)[)]\\ *values\\ *[(](([[:alnum:], \"]*\\,*\\ *)*|select .*)[)]";
 regex insertPattern(insertQuery, regex_constants::icase);
-deleteQuery = "^delete from ([a-zA-Z0-9]*)\\ *(where (.*))";
+deleteQuery = "^delete from ([a-zA-Z0-9]*)\\ *((where) (.*))*";
 regex deletePattern(deleteQuery, regex_constants::icase);
+//select queries
+selectQuery = "^select (.*)";
+selectQuery0 = "^select (.*) from (.*) where (.*) order by (.*)";
+selectQuery1 = "^select (.*) from (.*) order by (.*)";
+selectQuery2 = "^select (.*) from (.*) where (.*)";
+selectQuery3 = "^select (.*) from (.*)";
+regex selectPattern(selectQuery, regex_constants::icase);
+regex selectPattern0(selectQuery0, regex_constants::icase);
+regex selectPattern1(selectQuery1, regex_constants::icase);
+regex selectPattern2(selectQuery2, regex_constants::icase);
+regex selectPattern3(selectQuery3, regex_constants::icase);
+
 
 
 //create table statement
@@ -94,8 +111,12 @@ else if(regex_match(query.c_str(), attributes, insertPattern)) {
 	string attributeList = attributes[2];
 	string valueList = attributes[4];
 	vector<string>::iterator it;
-	//if(false) valueList == Select statement
-		//process select and the values to the fieldValues
+	if(regex_match(valueList,selectPattern)) {
+		cout<<"2 match"<<endl;
+		runQuery(valueList);
+		cout<<"implement a way to get the values from select and pass to vector<string> fieldValues"<<endl;
+		return;
+	}	//process select and the values to the fieldValues
       	vector<string> fieldNames = split(attributeList, ',');
 	vector<string> fieldValues = split(valueList, ',');
 	if(fieldNames.size()!=fieldValues.size()) {
@@ -109,7 +130,34 @@ else if(regex_match(query.c_str(), attributes, insertPattern)) {
 //delete from statment
 else if(regex_match(query.c_str(),attributes,deletePattern)) {
 	tableName = attributes[1];
-	cout<<attributes[1]<<endl<<attributes[2]<<endl<<attributes[3]<<endl<<attributes[4]<<endl<<attributes[5]<<endl<<attributes[6]<<endl;
+	
+	if(attributes[3]=="where")
+	{
+		cout<<attributes[4]<<endl;
+		cout<<"attributes are not null"<<endl;
+		return;
+	}
+	deleteFromTable(tableName);
+	return;
+}
+
+//select statement
+else if(regex_match(query.c_str(),selectPattern)) {
+
+	if(regex_match(query.c_str(), attributes, selectPattern0)) {
+	}
+	else if(regex_match(query.c_str(), attributes, selectPattern1)) {
+        }
+	else if(regex_match(query.c_str(), attributes, selectPattern2)) {
+        }
+	else if(regex_match(query.c_str(), attributes, selectPattern3)) {
+        	selectFromTable(attributes[2]);
+		return;
+	}
+	else {
+		cout<<"invalid statement "<<query<<endl;	
+		return;
+	}
 }
 else {
 	cout<<"Invalid query "<<query<<endl;

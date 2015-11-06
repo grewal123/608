@@ -1,0 +1,31 @@
+mainmemory
+block
+schema
+tuple
+relation
+field
+schemamanager
+
+disk - 200 blocks
+mainmemory - 10 blocks
+block - 8 fields
+field - int, str20
+
+
+create table a (1 int, 2 int , 3 int, 4 int , 5 int , 6 int)
+insert 
+
+
+delete
+- where condition evaluation
+insert
+ - select
+select 
+ - distinct removing duplicates
+ - attribute evaluation - tablename.columnname or columnname
+ - where condition evalutaion
+ - order by 
+
+join 
+ - one pass
+ - two pass

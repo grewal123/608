@@ -1,5 +1,7 @@
 all: TestStorageManager
 
+engine: g++ -o engine StorageManager.o engine.cpp queryparser.cpp
+
 TestStorageManager: StorageManager.o 
 	g++ -o TestStorageManager StorageManager.o TestStorageManager.cpp
 

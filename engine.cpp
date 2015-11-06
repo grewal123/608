@@ -114,7 +114,7 @@ void insertIntoTable(string tableName, vector<string> fieldNames, vector<string>
 	else {
 		Block *block = mainMemory.getBlock(0);
 		block->clear();
-		block->appendTuple(tuple);
+		block->setTuple(0,tuple);
 		relation->setBlock(0,0);
 	}
 	cout<<*relation<<endl;
@@ -128,12 +128,19 @@ void deleteFromTable(string tableName) {
 		return;
 	}
 	Relation *relation = schemaManager.getRelation(tableName);
-	Schema schmea = relation->getSchema();
-	int tableSize = relation->getNumOfBlocks();
-	if(tableSize>NUM_OF_BLOCKS_IN_MEMORY) {
-			
+	while(relation->getNumOfBlocks())
+	relation->deleteBlocks(relation->getNumOfBlocks()-1);
+	cout<<*relation<<endl;
+
+}
+
+
+void selectFromTable(string tableName) {
+
+	if(!schemaManager.relationExists(tableName)) {
+		cout<<"Illegal Table Name"<<endl;
+		return;
 	}
-	else {
-	
-	}
+	Relation *relation = schemaManager.getRelation(tableName);
+	cout<<*relation<<endl;
 }
