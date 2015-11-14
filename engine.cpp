@@ -14,6 +14,8 @@
 
 using namespace std;
 
+extern vector<string> split(string str, char delimiter);
+
 bool isNumber(string str) {
 
 	regex exp("^-?\\d+");
@@ -30,6 +32,9 @@ string removeSpaces(string str) {
 MainMemory mainMemory;
 Disk disk;
 SchemaManager schemaManager(&mainMemory, &disk);
+
+vector<Tuple> getAllTuplesOfRelation(string tableName);
+
 
 void createTable(string tableName, vector<string> fieldNames, vector<string> fieldTypes) {
 
@@ -135,12 +140,72 @@ void deleteFromTable(string tableName) {
 }
 
 
-void selectFromTable(string tableName) {
+void projection(vector<string> attributes) {
+}
 
-	if(!schemaManager.relationExists(tableName)) {
-		cout<<"Illegal Table Name"<<endl;
-		return;
+void selectFromTable(bool distinct, string attributes, string tables) {
+	vector<string> tableNames = split(tables, ',');
+	string tableName;
+	vector<string>::iterator it;
+	for(it=tableNames.begin();it!=tableNames.end();it++){
+		tableName = *it;
+		if(!schemaManager.relationExists(tableName)) {
+			cout<<"Illegal Table Name "<<tableName<<endl;
+			return;
+		}
 	}
+	vector<Tuple> tuples;
+	tuples = getAllTuplesOfRelation(tableName);
+	if(distinct) 
+	cout<<"the distinct flag is set to true"<<endl;	
+	vector<string> attributeNames = split(attributes, ',');
+	projection(attributeNames);
+	
+	//cout<<*relation<<endl;
+}
+
+vector<Tuple> getAllTuplesOfRelation(string tableName) {
+	 Relation *relation = schemaManager.getRelation(tableName);
+         Block *block = mainMemory.getBlock(0);
+         int size = relation->getNumOfBlocks();
+         int index=0,rem=10;
+         vector<Tuple> tuples;
+         while(size>0) {
+                 if(size<10)
+                 rem = size;
+                 relation->getBlocks(index,0,rem);
+                 cout<<mainMemory<<endl;
+                 for(int i=0;i<rem;i++) {
+                         block = mainMemory.getBlock(i);
+                         for(int j=0;j<block->getNumTuples();j++){
+                                 tuples.push_back(block->getTuple(j));
+                         }
+                         block->clear();
+                 }
+                 size = size-10;
+                 index = index+10;          
+         }
+         vector<Tuple>::iterator it1;
+         for(it1=tuples.begin();it1!=tuples.end();it1++){
+                 cout<<"the tuple are "<<*it1<<endl;
+         }
+	return tuples;
+}
+
+void getDistinctTuplesOfRelation(string tableName, vector<string> attributes) {
+
+
+}
+
+void whereCondition(string condition) {
+	cout<<"no idea how to evaluate this where statement"<<endl;
+	return;
+}
+
+void setDistinct(string tableName) {
 	Relation *relation = schemaManager.getRelation(tableName);
-	cout<<*relation<<endl;
+	int size = relation->getNumOfBlocks();
+	//for(int i=0
+	//vector<Tuple> allTuples = 
+
 }
