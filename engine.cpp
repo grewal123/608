@@ -28,6 +28,37 @@ string removeSpaces(string str) {
         str.erase(end_pos, str.end());
 	return str;
 }
+//Inputs : Tuple, vector of strings , schema of tuple
+// return boolean for match of condition in token
+
+bool conditionMatches(Tuple tuple,vector<string> tokens,Schema schema) {
+	tokens[0] = removeSpaces(tokens[0]);
+	tokens[1] = removeSpaces(tokens[1]);
+	//if field has int type
+	if(schema.getFieldType(tokens[0]) == INT)
+	{
+		int fieldValue = tuple.getField(tokens[0]).integer;
+		//checking the condition
+		if(fieldValue == stoi(tokens[1]))
+		return true;
+	}
+	//if field type is string
+	if(schema.getFieldType(tokens[0]) == STR20)
+	{
+		regex exp("\\ *\"(.*)\"");
+		cmatch match;
+		if(regex_match(tokens[1].c_str(),match,exp))
+		{
+			string* fieldValue = tuple.getField(tokens[0]).str;
+			if(*fieldValue == match[1])
+			return true;
+		}
+	}
+	return false;	
+}
+
+
+
 
 MainMemory mainMemory;
 Disk disk;
@@ -139,6 +170,41 @@ void deleteFromTable(string tableName) {
 
 }
 
+//new Api to delete specific tuples from table 
+void deleteTuplesFromTable(string tableName,vector<string> tokens) {
+
+	if(!schemaManager.relationExists(tableName)) {
+		cout<<"Illegal Table Name"<<endl;
+		return;
+	}
+	Relation *relation = schemaManager.getRelation(tableName);
+	Schema schema = relation->getSchema();
+	int n = relation->getNumOfBlocks();
+	vector<Tuple> tuples;
+	//iterating over block in relation
+	for(int i=0;i<n;i++)
+	{
+		relation->getBlock(i,0);
+		Block *block = mainMemory.getBlock(0);
+		//fetching all tuples in block i
+		tuples = block->getTuples();
+	    vector<Tuple>::iterator it;
+	    int index=0;
+		for(it = tuples.begin();it!=tuples.end();it++) 
+		{
+			//to check if tuple isn't already nullified
+			if(!(it->isNull()))
+			if(conditionMatches(*it,tokens,schema))
+			{	
+				block->nullTuple(index);
+			}
+			index++;
+		}
+		//resetting block to disk
+		relation->setBlock(i,0);
+	}
+}
+
 
 void projection(vector<string> attributes) {
 }
@@ -209,3 +275,4 @@ void setDistinct(string tableName) {
 	//vector<Tuple> allTuples = 
 
 }
+
