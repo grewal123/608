@@ -4,6 +4,7 @@
 #include<vector>
 #include<algorithm>
 #include<sstream>
+#include <string.h>
 using namespace std;
 
 extern void createTable(string tableName, vector<string> fieldNames, vector<string> fieldTypes);
@@ -13,6 +14,8 @@ extern void dropTable(string tableName);
 extern void insertIntoTable(string tableName, vector<string> fieldNames, vector<string> fieldValues);
 
 extern void deleteFromTable(string tableName);
+
+extern void deleteTuplesFromTable(string tableName,vector<string> tokens);
 
 extern void selectFromTable(string tableName);
 
@@ -131,10 +134,24 @@ else if(regex_match(query.c_str(), attributes, insertPattern)) {
 else if(regex_match(query.c_str(),attributes,deletePattern)) {
 	tableName = attributes[1];
 	
-	if(attributes[3]=="where")
+	if(attributes[3]=="WHERE")
 	{
-		cout<<attributes[4]<<endl;
-		cout<<"attributes are not null"<<endl;
+		//dividing the string after "where" in tokens
+		//seperated by = and push them to vector of strings
+		//tokens[0] is field name 
+		//token[1]  is field value
+		vector<string> tokens;
+		string str = attributes[4];
+		char * dup = strdup(str.c_str());
+    	char * token = strtok(dup,"=");
+    	while(token != NULL)
+    	{
+        tokens.push_back(string(token));
+        // the call is treated as a subsequent calls to strtok:
+        // the function continues from where it left in previous invocation
+        token = strtok(NULL,"=");
+        }
+		deleteTuplesFromTable(tableName,tokens);
 		return;
 	}
 	deleteFromTable(tableName);
