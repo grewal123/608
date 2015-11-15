@@ -17,7 +17,11 @@ extern void deleteFromTable(string tableName);
 
 extern void deleteTuplesFromTable(string tableName,vector<string> tokens);
 
+extern void deleteTuplesFromTable(string tableName,vector<string> tokens1,vector<string> token2);
+
 extern void selectFromTable(string tableName);
+
+extern vector<string>  tokenize(string condition);
 
 
 vector<string> split(string str, char delimiter) {
@@ -63,6 +67,8 @@ insertQuery = "^insert into ([a-zA-Z0-9]*)\\ *[(](([a-zA-Z0-9]*\\,*\\ *)*)[)]\\ 
 regex insertPattern(insertQuery, regex_constants::icase);
 deleteQuery = "^delete from ([a-zA-Z0-9]*)\\ *((where) (.*))*";
 regex deletePattern(deleteQuery, regex_constants::icase);
+string conditionQuery = "((.*))\\ *(and)\\ *(.*)";
+regex conditionPattern(conditionQuery, regex_constants::icase);
 //select queries
 selectQuery = "^select (.*)";
 selectQuery0 = "^select (.*) from (.*) where (.*) order by (.*)";
@@ -140,18 +146,22 @@ else if(regex_match(query.c_str(),attributes,deletePattern)) {
 		//seperated by = and push them to vector of strings
 		//tokens[0] is field name 
 		//token[1]  is field value
-		vector<string> tokens;
 		string str = attributes[4];
-		char * dup = strdup(str.c_str());
-    	char * token = strtok(dup,"=");
-    	while(token != NULL)
-    	{
-        tokens.push_back(string(token));
-        // the call is treated as a subsequent calls to strtok:
-        // the function continues from where it left in previous invocation
-        token = strtok(NULL,"=");
-        }
-		deleteTuplesFromTable(tableName,tokens);
+		if(regex_match(str.c_str(),attributes,conditionPattern))
+		{
+			string condition1 = attributes[2];
+			string condition2 = attributes[4];
+			vector<string> tokens1,tokens2;
+			tokens1 = tokenize(condition1);
+			tokens2 = tokenize(condition2);
+			deleteTuplesFromTable(tableName,tokens1,tokens2);
+		
+		}
+		else
+		{
+	     	vector<string> tokens = tokenize(str);
+	     	deleteTuplesFromTable(tableName,tokens);
+	    }
 		return;
 	}
 	deleteFromTable(tableName);

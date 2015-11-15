@@ -28,7 +28,21 @@ string removeSpaces(string str) {
 }
 //Inputs : Tuple, vector of strings , schema of tuple
 // return boolean for match of condition in token
+vector<string>  tokenize(string condition)
+{
+	vector<string> tokens;
+	char * dup = strdup(condition.c_str());
+    char * token = strtok(dup,"=");
+    while(token != NULL)
+    {
+    	tokens.push_back(string(token));
+        // the call is treated as a subsequent calls to strtok:
+        // the function continues from where it left in previous invocation
+        token = strtok(NULL,"=");
+    }
+    return tokens;
 
+}
 bool conditionMatches(Tuple tuple,vector<string> tokens,Schema schema) {
 	tokens[0] = removeSpaces(tokens[0]);
 	tokens[1] = removeSpaces(tokens[1]);
@@ -190,6 +204,39 @@ void deleteTuplesFromTable(string tableName,vector<string> tokens) {
 			//to check if tuple isn't already nullified
 			if(!(it->isNull()))
 			if(conditionMatches(*it,tokens,schema))
+			{	
+				block->nullTuple(index);
+			}
+			index++;
+		}
+		//resetting block to disk
+		relation->setBlock(i,0);
+	}
+}
+
+void deleteTuplesFromTable(string tableName,vector<string> tokens1,vector<string> tokens2)
+{
+	if(!schemaManager.relationExists(tableName)) {
+		cout<<"Illegal Table Name"<<endl;
+		return;
+	}
+	Relation *relation = schemaManager.getRelation(tableName);
+	Schema schema = relation->getSchema();
+	int n = relation->getNumOfBlocks();
+	vector<Tuple> tuples;
+	for(int i=0;i<n;i++)
+	{
+		relation->getBlock(i,0);
+		Block *block = mainMemory.getBlock(0);
+		//fetching all tuples in block i
+		tuples = block->getTuples();
+	    vector<Tuple>::iterator it;
+	    int index=0;
+		for(it = tuples.begin();it!=tuples.end();it++) 
+		{
+			//to check if tuple isn't already nullified
+			if(!(it->isNull()))
+			if(conditionMatches(*it,tokens1,schema) && conditionMatches(*it,tokens2,schema))
 			{	
 				block->nullTuple(index);
 			}
