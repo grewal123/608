@@ -15,13 +15,9 @@ extern void insertIntoTable(string tableName, vector<string> fieldNames, vector<
 
 extern void deleteFromTable(string tableName);
 
+extern void selectFromTable(bool distinct, string columnNames, string tableName);
 extern void deleteTuplesFromTable(string tableName,vector<string> tokens);
 
-extern void deleteTuplesFromTable(string tableName,vector<string> tokens1,vector<string> token2);
-
-extern void selectFromTable(string tableName);
-
-extern vector<string>  tokenize(string condition);
 
 
 vector<string> split(string str, char delimiter) {
@@ -52,9 +48,10 @@ runQuery(query);
 return 0;
 }
 void runQuery(string query) {
-string createQuery,fieldQuery,dropQuery,insertQuery,deleteQuery, selectQuery, selectQuery0, selectQuery1, selectQuery2, selectQuery3;
+string createQuery,fieldQuery,dropQuery,insertQuery,deleteQuery, selectQuery, selectQuery0, selectQuery1, selectQuery2, selectQuery3, distinctQuery;
 cmatch attributes,fields;
 string tableName;
+bool distinct=false;
 
 createQuery ="^create table ([a-zA-z0-9]*)\\ ?[(](.*)[)]";
 regex createPattern(createQuery, regex_constants::icase);
@@ -67,8 +64,6 @@ insertQuery = "^insert into ([a-zA-Z0-9]*)\\ *[(](([a-zA-Z0-9]*\\,*\\ *)*)[)]\\ 
 regex insertPattern(insertQuery, regex_constants::icase);
 deleteQuery = "^delete from ([a-zA-Z0-9]*)\\ *((where) (.*))*";
 regex deletePattern(deleteQuery, regex_constants::icase);
-string conditionQuery = "((.*))\\ *(and)\\ *(.*)";
-regex conditionPattern(conditionQuery, regex_constants::icase);
 //select queries
 selectQuery = "^select (.*)";
 selectQuery0 = "^select (.*) from (.*) where (.*) order by (.*)";
@@ -81,6 +76,8 @@ regex selectPattern1(selectQuery1, regex_constants::icase);
 regex selectPattern2(selectQuery2, regex_constants::icase);
 regex selectPattern3(selectQuery3, regex_constants::icase);
 
+distinctQuery = "\\ *distinct (.*)";
+regex distinctPattern(distinctQuery, regex_constants::icase);
 
 
 //create table statement
@@ -146,22 +143,18 @@ else if(regex_match(query.c_str(),attributes,deletePattern)) {
 		//seperated by = and push them to vector of strings
 		//tokens[0] is field name 
 		//token[1]  is field value
+		vector<string> tokens;
 		string str = attributes[4];
-		if(regex_match(str.c_str(),attributes,conditionPattern))
-		{
-			string condition1 = attributes[2];
-			string condition2 = attributes[4];
-			vector<string> tokens1,tokens2;
-			tokens1 = tokenize(condition1);
-			tokens2 = tokenize(condition2);
-			deleteTuplesFromTable(tableName,tokens1,tokens2);
-		
-		}
-		else
-		{
-	     	vector<string> tokens = tokenize(str);
-	     	deleteTuplesFromTable(tableName,tokens);
-	    }
+		char * dup = strdup(str.c_str());
+    	char * token = strtok(dup,"=");
+    	while(token != NULL)
+    	{
+        tokens.push_back(string(token));
+        // the call is treated as a subsequent calls to strtok:
+        // the function continues from where it left in previous invocation
+        token = strtok(NULL,"=");
+        }
+		deleteTuplesFromTable(tableName,tokens);
 		return;
 	}
 	deleteFromTable(tableName);
@@ -178,7 +171,12 @@ else if(regex_match(query.c_str(),selectPattern)) {
 	else if(regex_match(query.c_str(), attributes, selectPattern2)) {
         }
 	else if(regex_match(query.c_str(), attributes, selectPattern3)) {
-        	selectFromTable(attributes[2]);
+		string temp = attributes[1];
+		if(regex_match(temp.c_str(), fields, distinctPattern)) {
+			distinct = true;
+			temp = fields[1];	
+		}		
+        	selectFromTable(distinct, temp, attributes[2]);
 		return;
 	}
 	else {
