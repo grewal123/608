@@ -45,6 +45,20 @@ string removeSpaces(string str) {
 	return str;
 }
 
+string getColumn(string str, string tableName) {
+	regex exp("([a-zA-Z0-9]*)\\.([a-zA-Z0-9]*)");
+	cmatch field;
+	if(regex_match(str.c_str(),field,exp)) { 
+		if(tableName==field[1])	
+		return field[2];
+		else
+		return "*$";
+	}	
+	else
+	return str;
+}
+
+
 //tokenize the condition such as id=3
 // into tokens of fieldName and fieldValue
 vector<string>  tokenize(string condition)
@@ -96,9 +110,8 @@ bool conditionMatches(Tuple tuple,vector<string> tokens,Schema schema) {
 MainMemory mainMemory;
 Disk disk;
 SchemaManager schemaManager(&mainMemory, &disk);
-
-vector<Tuple> getAllTuplesOfRelation(string tableName);
 vector<Tuple> getDistinctTuples(vector<Tuple> tuples);
+string distinct(string tableName);
 
 void createTable(string tableName, vector<string> fieldNames, vector<string> fieldTypes) {
 
@@ -271,6 +284,58 @@ void deleteTuplesFromTable(string tableName,vector<string> tokens1,vector<string
 	}
 }
 
+string projection(vector<string> attributes, string tableName) {
+	Relation *relation = schemaManager.getRelation(tableName);
+	Schema tableSchema = relation->getSchema();
+	vector<string> fieldNames;
+	vector<enum FIELD_TYPE> fieldTypes;
+	vector<string>::iterator it;
+	int flag=-1;
+	bool print=true;
+	for(it=attributes.begin();it!=attributes.end();it++) {
+		for(int i=0;i<tableSchema.getNumOfFields();i++) {
+			string temp = *it;
+			if(tableSchema.getFieldName(i)==getColumn(temp, tableName)) 
+			flag=i;
+		}
+		if(flag!=-1) {
+			fieldNames.push_back(tableSchema.getFieldName(flag));
+			fieldTypes.push_back(tableSchema.getFieldType(flag));
+			flag = -1;
+		}	
+	}
+	Schema dupSchema(fieldNames,fieldTypes);
+	Relation *relationDup = schemaManager.createRelation(tableName.append("_dup"), dupSchema);	
+	Tuple tuple = relationDup->createTuple();
+	vector<Tuple>::iterator it1;
+	Block *block = mainMemory.getBlock(9);
+	block->clear();
+	int index=0;
+	for(int i=0;i<relation->getNumOfBlocks();i++) {
+		relation->getBlock(i,0);//assuming 0 is free
+		vector<Tuple> t = mainMemory.getBlock(0)->getTuples();
+		for(it1=t.begin();it1!=t.end();it1++) {
+			for(int j=0;j<fieldNames.size();j++) {
+				if(fieldTypes[j]==INT)
+				tuple.setField(fieldNames[j],it1->getField(fieldNames[j]).integer);
+				else
+				tuple.setField(fieldNames[j],*(it1->getField(fieldNames[j]).str));
+			}
+			if(!block->isFull())	
+			block->appendTuple(tuple);
+			else {
+				relationDup->setBlock(index,9);
+				index++;
+				block->clear();
+				block->appendTuple(tuple);
+			}
+		}
+	}
+	if(index!=relationDup->getNumOfBlocks()-1)
+		relationDup->setBlock(index, 9);
+	return tableName;
+}
+
 void temp(vector<string> attributes, vector<Table> tables) {
 
 	vector<Table>::iterator tableIter;
@@ -281,13 +346,49 @@ void temp(vector<string> attributes, vector<Table> tables) {
 		for(tupleIter=tuple.begin();tupleIter!=tuple.end();tupleIter++) {
 			cout<<*tupleIter<<endl;
 		}
+		projection(attributes, tableIter->getTableName());
 	}
 }
 
-void selectFromTable(bool distinct, string attributes, string tabs) {
+void selectFromTable(bool dis, string attributes, string tabs) {
 	vector<string> tableNames = split(tabs, ',');
 	vector<Table> tables;
+	vector<string> attributeNames = split(attributes, ',');
+	vector<string> temp2, temp1;
+	for(int i=0;i<tableNames.size();i++) {
+		temp2.push_back(removeSpaces(tableNames[i]));
+	}
+	tableNames = temp2;
+	for(int i=0;i<attributeNames.size();i++) {
+		temp1.push_back(removeSpaces(attributeNames[i]));
+	}
+	attributeNames = temp1;
 	string tableName;
+	if(tableNames.size()==1) {
+		Relation *relation = schemaManager.getRelation(tableNames[0]);
+		if(attributeNames.size()==1 && attributeNames[0]=="*") { 
+			if(dis) {
+				distinct(tableNames[0]);
+				relation = schemaManager.getRelation(tableNames[0].append("_distinct"));
+			}
+		cout<<*relation<<endl;
+		schemaManager.deleteRelation(tableNames[0]);
+		}
+		else {
+			string tempName = projection(attributeNames, tableNames[0]);
+			string d;
+			relation = schemaManager.getRelation(tempName);
+			if(dis) {
+				d = distinct(tempName);
+				relation = schemaManager.getRelation(d);	
+			}
+			cout<<*relation<<endl;
+			schemaManager.deleteRelation(tempName);
+			if(dis)
+			schemaManager.deleteRelation(d);
+		}
+	}
+	else {
 	vector<string>::iterator it;
 	for(it=tableNames.begin();it!=tableNames.end();it++){
 		tableName = *it;
@@ -297,44 +398,84 @@ void selectFromTable(bool distinct, string attributes, string tabs) {
 		}
 	
 		vector<Tuple> tuples;
-		tuples = getAllTuplesOfRelation(tableName);
-		if(distinct) 
+		if(dis) 
 		tuples = getDistinctTuples(tuples);	
 		Table table = Table(tableName, tuples);
 		tables.push_back(table);
-	}
-	
-	vector<string> attributeNames = split(attributes, ',');
+		}	
 	temp(attributeNames, tables);
+	}
 }
 
-vector<Tuple> getAllTuplesOfRelation(string tableName) {
-	 Relation *relation = schemaManager.getRelation(tableName);
-         Block *block = mainMemory.getBlock(0);
-         int size = relation->getNumOfBlocks();
-         int index=0,rem=10;
-         vector<Tuple> tuples;
-         while(size>0) {
-                 if(size<10)
-                 rem = size;
-                 relation->getBlocks(index,0,rem);
-                 for(int i=0;i<rem;i++) {
-                         block = mainMemory.getBlock(i);
-                         for(int j=0;j<block->getNumTuples();j++){
-                                 tuples.push_back(block->getTuple(j));
-                         }
-                         block->clear();
-                 }
-                 size = size-10;
-                 index = index+10;          
-         }
-	return tuples;
+void writeTuples(string tableName, vector<Tuple> tuples) {
+	vector<Tuple>::iterator it;
+	Relation *relation = schemaManager.getRelation(tableName);
+	Tuple tuple = relation->createTuple();
+	Block *block = mainMemory.getBlock(0);
+	block->clear();
+	int index = 0;
+	for(it=tuples.begin();it!=tuples.end();it++) {
+		tuple = *it;
+		if(!block->isFull()) 
+		block->appendTuple(tuple);
+		else {
+			relation->setBlock(index,0);
+			index++;
+			block->clear();
+			block->appendTuple(tuple);
+		}
+	}
+	if(index!=relation->getNumOfBlocks()-1)
+		relation->setBlock(index,0);
+}
+
+string distinct(string tableName) {
+	Relation *relation = schemaManager.getRelation(tableName);
+	Schema schema = relation->getSchema();
+	int size = relation->getNumOfBlocks();
+	vector<Tuple> tuples;
+	bool flag = true;
+	if(size<=10) {
+		relation->getBlocks(0,0,size);
+		for(int i=0;i<size;i++) {
+			Block *block = mainMemory.getBlock(i);
+			for(int j=0;j<block->getNumTuples();j++) {
+				tuples.push_back(block->getTuple(j));
+			}
+		}
+	tuples = getDistinctTuples(tuples);
+	Relation *relation1 = schemaManager.createRelation(tableName+"_distinct",schema); 
+	writeTuples(tableName+"_distinct",tuples);
+	}
+	else {
+		int index = 0, loadSize=10;
+		while(size>0) {
+			relation->getBlocks(index,0,loadSize);
+			for(int i=0;i<loadSize;i++) {
+				Block *block = mainMemory.getBlock(i);
+				for(int j=0;j<block->getNumTuples();j++) {
+					tuples.push_back(block->getTuple(j));
+				}
+				//tuples = sortTuples(tuples, tableName);
+				if(flag) {	
+					Relation *relation2= schemaManager.createRelation(tableName+"_distinct", schema);
+					flag = false;
+				}
+				writeTuples(tableName+"_distinct", tuples);
+			}
+			index = index+10;
+			size = size-10;
+			if(size<10)
+			loadSize = size;
+		}
+	}
+	return tableName+"_distinct";
 }
 
 bool compare(Tuple tuple1, Tuple tuple2) {
-	Schema tuple_schema = tuple1.getSchema();
+	Schema tupleSchema = tuple1.getSchema();
 	for(int i=0;i<tuple1.getNumOfFields();i++) {
-		if(tuple_schema.getFieldType(i) == INT) {
+		if(tupleSchema.getFieldType(i) == INT) {
 			if(tuple1.getField(i).integer != tuple2.getField(i).integer)
 			return false;
 		}
@@ -366,3 +507,20 @@ void whereCondition(string condition) {
 	cout<<"no idea how to evaluate this where statement"<<endl;
 	return;
 }
+
+/*
+void selection(string tableName, condition) {
+	Relation *relation = SchemaManager.getRelation(tableName);
+	int numOfBlocks = relation->getNumOfBlocks();
+	if(numOfBlocks<9) {
+		//onepass
+		relation->getBlocks(0,0,num);
+		for(int i=0;i<num;i++) {
+			
+		}
+	}
+	else {
+		//twopass	
+	}
+}
+*/
