@@ -125,7 +125,6 @@ else if(regex_match(query.c_str(),attributes,dropPattern)) {
 
 //insert into statement
 else if(regex_match(query.c_str(), attributes, insertPattern)) {
-	cout<<"insert statment"<<endl;
 	tableName = attributes[1];
 	string attributeList = attributes[2];
 	string valueList = attributes[4];
