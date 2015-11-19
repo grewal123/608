@@ -15,6 +15,7 @@
 using namespace std;
 
 extern vector<string> split(string str, char delimiter);
+extern vector<string> splitWord(string str, string splitter);
 
 class Table {
 string tableName;
@@ -33,7 +34,6 @@ public:
 };
 
 bool isNumber(string str) {
-
 	regex exp("^-?\\d+");
 	if(regex_match(str,exp))return true;
 	else return false;
@@ -58,40 +58,13 @@ string getColumn(string str, string tableName) {
 	return str;
 }
 
-
-//tokenize the condition such as id=3
-// into tokens of fieldName and fieldValue
-vector<string>  tokenize(string condition)
-{
-	vector<string> tokens;
-	char * dup = strdup(condition.c_str());
-	char * token = strtok(dup,"=");
-    	while(token != NULL)
-    	{
-    		tokens.push_back(string(token));
-        	// the call is treated as a subsequent calls to strtok:
-        	// the function continues from where it left in previous invocation
-        	token = strtok(NULL,"=");
-    	}
-    	return tokens;
-}
-
-//Inputs : Tuple, vector of strings , schema of tuple
-// return boolean for match of condition in token
-bool conditionMatches(Tuple tuple,vector<string> tokens,Schema schema) {
-	tokens[0] = removeSpaces(tokens[0]);
-	tokens[1] = removeSpaces(tokens[1]);
-	//if field has int type
-	if(schema.getFieldType(tokens[0]) == INT)
-	{
+bool conditionMatches(Tuple tuple, vector<string> tokens) {
+	if(tuple.getSchema().getFieldType(tokens[0]) == INT) {
 		int fieldValue = tuple.getField(tokens[0]).integer;
-		//checking the condition
 		if(fieldValue == stoi(tokens[1]))
-		return true;
+		return true; 
 	}
-	//if field type is string
-	if(schema.getFieldType(tokens[0]) == STR20)
-	{
+	else {
 		regex exp("\\ *\"(.*)\"");
 		cmatch match;
 		if(regex_match(tokens[1].c_str(),match,exp))
@@ -104,14 +77,12 @@ bool conditionMatches(Tuple tuple,vector<string> tokens,Schema schema) {
 	return false;	
 }
 
-
-
-
 MainMemory mainMemory;
 Disk disk;
 SchemaManager schemaManager(&mainMemory, &disk);
 vector<Tuple> getDistinctTuples(vector<Tuple> tuples);
 string distinct(string tableName);
+bool whereConditionEvaluator(string whereCondition, Tuple tuple);
 
 void createTable(string tableName, vector<string> fieldNames, vector<string> fieldTypes) {
 
@@ -202,85 +173,29 @@ void insertIntoTable(string tableName, vector<string> fieldNames, vector<string>
 	cout<<*relation<<endl;
 }
 
-
-void deleteFromTable(string tableName) {
-
-	if(!schemaManager.relationExists(tableName)) {
-		cout<<"Illegal Table Name"<<endl;
-		return;
-	}
-	Relation *relation = schemaManager.getRelation(tableName);
-	while(relation->getNumOfBlocks())
-	relation->deleteBlocks(relation->getNumOfBlocks()-1);
-	cout<<*relation<<endl;
-
-}
-
-//new Api to delete specific tuples from table 
-void deleteTuplesFromTable(string tableName,vector<string> tokens) {
-
-	if(!schemaManager.relationExists(tableName)) {
-		cout<<"Illegal Table Name"<<endl;
-		return;
-	}
-	Relation *relation = schemaManager.getRelation(tableName);
-	Schema schema = relation->getSchema();
-	int n = relation->getNumOfBlocks();
-	vector<Tuple> tuples;
-	//iterating over block in relation
-	for(int i=0;i<n;i++)
-	{
-		relation->getBlock(i,0);
-		Block *block = mainMemory.getBlock(0);
-		//fetching all tuples in block i
-		tuples = block->getTuples();
-	    vector<Tuple>::iterator it;
-	    int index=0;
-		for(it = tuples.begin();it!=tuples.end();it++) 
-		{
-			//to check if tuple isn't already nullified
-			if(!(it->isNull()))
-			if(conditionMatches(*it,tokens,schema))
-			{	
-				block->nullTuple(index);
-			}
-			index++;
+void deleteFromTable(string tableName, string whereCondition) {
+	if(whereCondition.empty()){
+		if(!schemaManager.relationExists(tableName)) {
+			cout<<"Illegal Table Name"<<endl;
+			return;
 		}
-		//resetting block to disk
-		relation->setBlock(i,0);
+		Relation *relation = schemaManager.getRelation(tableName);
+		while(relation->getNumOfBlocks())
+		relation->deleteBlocks(relation->getNumOfBlocks()-1);
 	}
-}
-//delete statement with two conditions stored in tokens1 and tokens2
-void deleteTuplesFromTable(string tableName,vector<string> tokens1,vector<string> tokens2)
-{
-	if(!schemaManager.relationExists(tableName)) {
-		cout<<"Illegal Table Name"<<endl;
-		return;
-	}
-	Relation *relation = schemaManager.getRelation(tableName);
-	Schema schema = relation->getSchema();
-	int n = relation->getNumOfBlocks();
-	vector<Tuple> tuples;
-	for(int i=0;i<n;i++)
-	{
-		relation->getBlock(i,0);
-		Block *block = mainMemory.getBlock(0);
-		//fetching all tuples in block i
-		tuples = block->getTuples();
-	    vector<Tuple>::iterator it;
-	    int index=0;
-		for(it = tuples.begin();it!=tuples.end();it++) 
-		{
-			//to check if tuple isn't already nullified
-			if(!(it->isNull()))
-			if(conditionMatches(*it,tokens1,schema) && conditionMatches(*it,tokens2,schema))
-			{	
-				block->nullTuple(index);
-			}
-			index++;
+	else {
+		Relation *relation = schemaManager.getRelation(tableName);
+		for(int i=0;i<relation->getNumOfBlocks();i++) {
+			relation->getBlock(i,0);
+			Block *block = mainMemory.getBlock(0);
+			vector<Tuple> tuples = block->getTuples();
+			for(int j=0;j<tuples.size();j++) {
+				if(whereConditionEvaluator(whereCondition, tuples[j])) {
+					block->nullTuple(j);
+				}
+			}	
+			relation->setBlock(i,0);
 		}
-		//resetting block to disk
-		relation->setBlock(i,0);
 	}
 }
 
@@ -312,7 +227,7 @@ string projection(vector<string> attributes, string tableName) {
 	block->clear();
 	int index=0;
 	for(int i=0;i<relation->getNumOfBlocks();i++) {
-		relation->getBlock(i,0);//assuming 0 is free
+		relation->getBlock(i,0);
 		vector<Tuple> t = mainMemory.getBlock(0)->getTuples();
 		for(it1=t.begin();it1!=t.end();it1++) {
 			for(int j=0;j<fieldNames.size();j++) {
@@ -336,43 +251,36 @@ string projection(vector<string> attributes, string tableName) {
 	return tableName;
 }
 
-void temp(vector<string> attributes, vector<Table> tables) {
-
-	vector<Table>::iterator tableIter;
-	vector<Tuple>::iterator tupleIter;
-	vector<string>::iterator stringIter;
-	for(tableIter=tables.begin();tableIter!=tables.end();tableIter++) {
-		vector<Tuple> tuple=tableIter->getTuples();
-		for(tupleIter=tuple.begin();tupleIter!=tuple.end();tupleIter++) {
-			cout<<*tupleIter<<endl;
+void validate(vector<string> tableNames) {
+	for(int i=0;i<tableNames.size();i++) {
+		if(!schemaManager.relationExists(tableNames[i])) {
+			cout<<"Invalid Table Name "<< tableNames[i]<<endl;
+			return;
 		}
-		projection(attributes, tableIter->getTableName());
 	}
 }
 
-void selectFromTable(bool dis, string attributes, string tabs) {
+string join(bool distinct, vector<string> tableNames, string whereCondition) {
+	return "";
+}
+
+void selectFromTable(bool dis, string attributes, string tabs, string whereCondition, string orderBy) {
 	vector<string> tableNames = split(tabs, ',');
 	vector<Table> tables;
 	vector<string> attributeNames = split(attributes, ',');
-	vector<string> temp2, temp1;
-	for(int i=0;i<tableNames.size();i++) {
-		temp2.push_back(removeSpaces(tableNames[i]));
-	}
-	tableNames = temp2;
-	for(int i=0;i<attributeNames.size();i++) {
-		temp1.push_back(removeSpaces(attributeNames[i]));
-	}
-	attributeNames = temp1;
 	string tableName;
+	validate(tableNames);
 	if(tableNames.size()==1) {
 		Relation *relation = schemaManager.getRelation(tableNames[0]);
 		if(attributeNames.size()==1 && attributeNames[0]=="*") { 
+			string d;
 			if(dis) {
-				distinct(tableNames[0]);
-				relation = schemaManager.getRelation(tableNames[0].append("_distinct"));
+				d = distinct(tableNames[0]);
+				relation = schemaManager.getRelation(d);
 			}
 		cout<<*relation<<endl;
-		schemaManager.deleteRelation(tableNames[0]);
+		if(dis)
+		schemaManager.deleteRelation(d);
 		}
 		else {
 			string tempName = projection(attributeNames, tableNames[0]);
@@ -389,21 +297,20 @@ void selectFromTable(bool dis, string attributes, string tabs) {
 		}
 	}
 	else {
-	vector<string>::iterator it;
-	for(it=tableNames.begin();it!=tableNames.end();it++){
-		tableName = *it;
-		if(!schemaManager.relationExists(tableName)) {
-			cout<<"Illegal Table Name "<<tableName<<endl;
-			return;
+		vector<string>::iterator it;
+		vector<string> projections;
+		if(attributeNames.size()==1 && attributeNames[0] == "*") {
+			string temp = join(dis, tableNames, whereCondition);
+			Relation *relation = schemaManager.getRelation(temp);
+			cout<<*relation<<endl;
+			schemaManager.deleteRelation(temp);
 		}
-	
-		vector<Tuple> tuples;
-		if(dis) 
-		tuples = getDistinctTuples(tuples);	
-		Table table = Table(tableName, tuples);
-		tables.push_back(table);
-		}	
-	temp(attributeNames, tables);
+		else {
+			for(int i=0;i<tableNames.size();i++) {
+				//can join before projection or join after projection or join after performing the where condition evaluation
+				//Not sure how to do this yet
+			}
+		}
 	}
 }
 
@@ -427,6 +334,10 @@ void writeTuples(string tableName, vector<Tuple> tuples) {
 	}
 	if(index!=relation->getNumOfBlocks()-1)
 		relation->setBlock(index,0);
+}
+
+vector<Tuple> sortTuples(vector<Tuple> tuples, string tableName) {
+	return tuples;
 }
 
 string distinct(string tableName) {
@@ -456,7 +367,7 @@ string distinct(string tableName) {
 				for(int j=0;j<block->getNumTuples();j++) {
 					tuples.push_back(block->getTuple(j));
 				}
-				//tuples = sortTuples(tuples, tableName);
+				tuples = sortTuples(tuples, tableName);
 				if(flag) {	
 					Relation *relation2= schemaManager.createRelation(tableName+"_distinct", schema);
 					flag = false;
@@ -503,24 +414,37 @@ vector<Tuple> getDistinctTuples(vector<Tuple> tuples) {
 	return temp;
 }
 
-void whereCondition(string condition) {
-	cout<<"no idea how to evaluate this where statement"<<endl;
-	return;
+bool evaluate(string str, Tuple tuple) {
+	vector<string> temp = split(str,'=');//should be able to evaluate < and >
+	return conditionMatches(tuple,temp);
 }
 
-/*
-void selection(string tableName, condition) {
-	Relation *relation = SchemaManager.getRelation(tableName);
-	int numOfBlocks = relation->getNumOfBlocks();
-	if(numOfBlocks<9) {
-		//onepass
-		relation->getBlocks(0,0,num);
-		for(int i=0;i<num;i++) {
+bool whereConditionEvaluator(string str, Tuple tuple) {
+	vector<string> orConditions = splitWord(str, "or");
+	vector<map<int, bool> > values;
+	map<int, bool> subMap;
+	for(int i=0;i<orConditions.size();i++) {
+		vector<string> andConditions = splitWord(orConditions[i], "and");
+		for(int j=0;j<andConditions.size();j++) {
+			bool flag = evaluate(andConditions[j], tuple);
+			subMap[j] = flag;
+		}
+		values.push_back(subMap);
+		subMap.clear();
+	}
+	for(int i=0;i<values.size();i++) {
+		bool flag = false;
+		int c=0;
+		for(int j=0;j<values[i].size();j++) {
+			if(values[i][j])
+				c =c+0;
+			else c=c+1;
 			
 		}
+		if(c==0)
+		flag = true;
+		if(flag) 
+			return true;
 	}
-	else {
-		//twopass	
-	}
+	return false;
 }
-*/
