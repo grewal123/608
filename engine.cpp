@@ -101,6 +101,9 @@ string distinct(string tableName);
 bool whereConditionEvaluator(string whereCondition, Tuple tuple);
 int compareNotEqual(Tuple tuple1, Tuple tuple2);
 string crossJoin(string tableName1, string tableName2);
+void mCrossJoin(string tableName);
+void schemaBuilder(vector<string> tableNames);
+string xyz(string tableName1, string tableName2);
 
 void createTable(string tableName, vector<string> fieldNames, vector<string> fieldTypes) {
 
@@ -278,10 +281,6 @@ bool validate(vector<string> tableNames) {
 	return false;
 }
 
-string join(bool distinct, vector<string> tableNames, string whereCondition) {
-	return "";
-}
-
 void selectFromTable(bool dis, string attributes, string tabs, string whereCondition, string orderBy) {
 	int disk0 = disk.getDiskIOs();
 	vector<string> tableNames = split(tabs, ',');
@@ -331,17 +330,25 @@ void selectFromTable(bool dis, string attributes, string tabs, string whereCondi
 	else {
 		vector<string>::iterator it;
 		vector<string> projections;
-		if(attributeNames.size()==1 && attributeNames[0] == "*" && tableNames.size()==2) {
+		if(tableNames.size()==2) {
 			string temp = crossJoin(tableNames[0], tableNames[1]);
-			Relation *relation = schemaManager.getRelation(temp);
-			cout<<*relation<<endl;
-			schemaManager.deleteRelation(temp);
+			if(attributeNames.size()==1 && attributeNames[0] =="*") {
+				Relation *relation = schemaManager.getRelation(temp);
+				cout<<*relation<<endl;
+				schemaManager.deleteRelation(temp);
+			}
 		}
 		else {
-			for(int i=0;i<tableNames.size();i++) {
-				//can join before projection or join after projection or join after performing the where condition evaluation
-				//Not sure how to do this yet
+			//schemaBuilder(tableNames);
+			bool flag =true;
+			string str = crossJoin(tableNames[0],tableNames[1]);
+			for(int i=2;i<tableNames.size();i++) {
+				//mCrossJoin(tableNames[i]);
+				str = xyz(str, tableNames[i]);
 			}
+			Relation *relation = schemaManager.getRelation(str);
+			cout<<*relation<<endl;
+			schemaManager.deleteRelation(str);
 		}
 	}
 	cout<<"No. of disk IO's used for this opertaion are "<<disk.getDiskIOs()-disk0<<endl;
@@ -572,22 +579,8 @@ bool whereConditionEvaluator(string str, Tuple tuple) {
 	return false;
 }
 
-void join(Tuple tuple1, Tuple tuple2, string tableName1, string tableName2) {
-	Relation *relation = schemaManager.getRelation("_join2");
-	Tuple tuple =relation->createTuple();
-	for(int i=0;i<tuple1.getNumOfFields();i++) {
-		if(tuple1.getSchema().getFieldType(i) == INT)
-		tuple.setField(tableName1+"."+tuple1.getSchema().getFieldName(i), tuple1.getField(i).integer);
-		else
-		tuple.setField(tableName1+"."+tuple1.getSchema().getFieldName(i), *(tuple1.getField(i).str) );
-	}
-	for(int i=0;i<tuple2.getNumOfFields();i++) {
-	        if(tuple2.getSchema().getFieldType(i) == INT)
-                tuple.setField(tableName2+"."+tuple2.getSchema().getFieldName(i), tuple2.getField(i).integer);
-                else                
-		tuple.setField(tableName2+"."+tuple2.getSchema().getFieldName(i), *(tuple2.getField(i).str) );
-        }
-
+void insertIntoRelation(string tableName, Tuple tuple) {
+	Relation *relation = schemaManager.getRelation(tableName);
 	if(relation->getNumOfBlocks()>0){
                 relation->getBlock(relation->getNumOfBlocks()-1,9);
                 Block *block = mainMemory.getBlock(9);
@@ -608,6 +601,24 @@ void join(Tuple tuple1, Tuple tuple2, string tableName1, string tableName2) {
                 relation->setBlock(0,9);
         }
 
+}
+
+void join(Tuple tuple1, Tuple tuple2, string tableName1, string tableName2) {
+	Relation *relation = schemaManager.getRelation(tableName2+"_join");
+	Tuple tuple =relation->createTuple();
+	for(int i=0;i<tuple1.getNumOfFields();i++) {
+		if(tuple1.getSchema().getFieldType(i) == INT)
+		tuple.setField(tableName1+"."+tuple1.getSchema().getFieldName(i), tuple1.getField(i).integer);
+		else
+		tuple.setField(tableName1+"."+tuple1.getSchema().getFieldName(i), *(tuple1.getField(i).str) );
+	}
+	for(int i=0;i<tuple2.getNumOfFields();i++) {
+	        if(tuple2.getSchema().getFieldType(i) == INT)
+                tuple.setField(tableName2+"."+tuple2.getSchema().getFieldName(i), tuple2.getField(i).integer);
+                else                
+		tuple.setField(tableName2+"."+tuple2.getSchema().getFieldName(i), *(tuple2.getField(i).str) );
+        }
+	insertIntoRelation(tableName2+"_join", tuple);
 }
 
 string crossJoin(string tableName1, string tableName2) {
@@ -633,7 +644,7 @@ string crossJoin(string tableName1, string tableName2) {
                 fieldTypes.push_back(schema2.getFieldType(i));
         }
         Schema schema(fieldNames,fieldTypes);
-        Relation *relation = schemaManager.createRelation("_join2",schema);
+        Relation *relation = schemaManager.createRelation(big+"_join",schema);
 	Relation *relation1 = schemaManager.getRelation(small);
 	Relation *relation2 = schemaManager.getRelation(big);
 	int size1 = relation1->getNumOfBlocks(), size2 = relation2->getNumOfBlocks();
@@ -652,9 +663,64 @@ string crossJoin(string tableName1, string tableName2) {
 			}
 		}
 	}
-	string rt = "_join2";
+	string rt = big+"_join";
 	return rt;
 }
 
+void joinxyz(Tuple tuple1, Tuple tuple2, string tableName2) {
+        Relation *relation = schemaManager.getRelation(tableName2+"_join");
+        Tuple tuple =relation->createTuple();
+        for(int i=0;i<tuple1.getNumOfFields();i++) {
+                if(tuple1.getSchema().getFieldType(i) == INT)
+                tuple.setField(tuple1.getSchema().getFieldName(i), tuple1.getField(i).integer);
+                else
+                tuple.setField(tuple1.getSchema().getFieldName(i), *(tuple1.getField(i).str) );
+        }
+        for(int i=0;i<tuple2.getNumOfFields();i++) {
+                if(tuple2.getSchema().getFieldType(i) == INT)
+                tuple.setField(tableName2+"."+tuple2.getSchema().getFieldName(i), tuple2.getField(i).integer);
+                else
+                tuple.setField(tableName2+"."+tuple2.getSchema().getFieldName(i), *(tuple2.getField(i).str) );
+        }
+        insertIntoRelation(tableName2+"_join", tuple);
+}
 
-	
+string xyz(string tableName1, string tableName2) {
+	Schema schema1 = schemaManager.getSchema(tableName1);
+        Schema schema2 = schemaManager.getSchema(tableName2);
+        vector<string> fieldNames;
+        vector<enum FIELD_TYPE> fieldTypes;
+        for(int i=0;i<schema1.getNumOfFields();i++) {
+                fieldNames.push_back(schema1.getFieldName(i));
+                fieldTypes.push_back(schema1.getFieldType(i));
+        }
+        for(int i=0;i<schema2.getNumOfFields();i++) {
+                fieldNames.push_back(tableName2+"."+schema2.getFieldName(i));
+                fieldTypes.push_back(schema2.getFieldType(i));
+        }
+	Schema schema(fieldNames,fieldTypes);
+        Relation *relation = schemaManager.createRelation(tableName2+"_join",schema);
+        Relation *relation1 = schemaManager.getRelation(tableName1);
+        Relation *relation2 = schemaManager.getRelation(tableName2);
+	cout<<*relation1<<endl;
+        int size1 = relation1->getNumOfBlocks(), size2 = relation2->getNumOfBlocks();
+        for(int x=0;x<size1;x++) {
+                relation1->getBlock(x,0);
+                Block *block0 = mainMemory.getBlock(0);
+                for(int y=0;y<block0->getNumTuples();y++) {
+                        Tuple tuple1 = block0->getTuple(y);
+                        for(int i=0;i<size2;i++) {
+                                relation2->getBlock(i,1);
+                                Block *block = mainMemory.getBlock(1);
+                                for(int j=0;j<block->getNumTuples();j++) {
+                                        Tuple tuple2 = block->getTuple(j);
+                                        joinxyz(tuple1, tuple2, tableName2);
+                                }
+                        }
+                }
+        }
+	schemaManager.deleteRelation(tableName1);
+        string rt = tableName2+"_join";
+        return rt;
+}
+
