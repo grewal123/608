@@ -18,22 +18,6 @@ using namespace std;
 extern vector<string> split(string str, char delimiter);
 extern vector<string> splitWord(string str, string splitter);
 
-class Table {
-string tableName;
-vector<Tuple> tuples;
-public:
-	Table(string tableName, vector<Tuple> tuples) {
-		this->tableName = tableName;
-		this->tuples = tuples;
-	}
-	string getTableName() {
-		return tableName;
-	}
-	vector<Tuple> getTuples() {
-		return tuples;
-	}
-};
-
 bool isNumber(string str) {
 	regex exp("^-?\\d+");
 	if(regex_match(str,exp))return true;
@@ -46,7 +30,9 @@ string removeSpaces(string str) {
 	return str;
 }
 
-string getColumn(string str, string tableName) {
+string getColumn(string str, string tableName, bool flag) {
+	if(flag)
+	return str;
 	regex exp("([a-zA-Z0-9]*)\\.([a-zA-Z0-9]*)");
 	cmatch field;
 	if(regex_match(str.c_str(),field,exp)) { 
@@ -59,34 +45,55 @@ string getColumn(string str, string tableName) {
 	return str;
 }
 
-int conditionMatches(Tuple tuple, vector<string> tokens) {
+int conditionMatches(Tuple tuple, vector<string> tokens, bool join) {
 	Schema schema = tuple.getSchema();
-	bool flag=false;
-	for(int i=0;i<schema.getNumOfFields();i++) {
-		if(schema.getFieldName(i) == tokens[0])
-		flag=true;
-	}
-	if(flag)
-	{
-		if(tuple.getSchema().getFieldType(tokens[0]) == INT) {
-			int fieldValue = tuple.getField(tokens[0]).integer;
-			if(isNumber(tokens[1])){
-				if(fieldValue == stoi(tokens[1]))
-				return 0; 
-				else 
-				return 1;
-			}	
+	if(join){
+		bool flag1=false, flag2=false;
+		for(int i=0;i<schema.getNumOfFields();i++) {
+			if(schema.getFieldName(i) == tokens[0])
+			flag1=true;
+			if(schema.getFieldName(i) == tokens[1])
+			flag2=true; 
 		}
-		else {
-			regex exp("\\ *\"(.*)\"");
-			cmatch match;
-			if(regex_match(tokens[1].c_str(),match,exp))
-			{
-				string* fieldValue = tuple.getField(tokens[0]).str;
-				if(*fieldValue == match[1])
-				return 0;
-				else 
-				return 1;
+		if(flag1 && flag2) {
+			if(tuple.getSchema().getFieldType(tokens[0]) == INT) {
+				if(tuple.getField(tokens[0]).integer == tuple.getField(tokens[1]).integer)	return 0;
+				else return 1;
+			}
+			else {
+				if(*(tuple.getField(tokens[1]).str) == *(tuple.getField(tokens[1]).str))	return 0;
+				else return 1;
+			}
+		}
+	}
+	else{
+		bool flag=false;
+        	for(int i=0;i<schema.getNumOfFields();i++) {
+                	if(schema.getFieldName(i) == tokens[0])
+                 	flag=true;
+         	}
+		if(flag)
+		{
+			if(tuple.getSchema().getFieldType(tokens[0]) == INT) {
+				int fieldValue = tuple.getField(tokens[0]).integer;
+				if(isNumber(tokens[1])){
+					if(fieldValue == stoi(tokens[1]))
+					return 0; 
+					else 
+					return 1;
+				}	
+			}
+			else {
+				regex exp("\\ *\"(.*)\"");
+				cmatch match;
+				if(regex_match(tokens[1].c_str(),match,exp))
+				{
+					string* fieldValue = tuple.getField(tokens[0]).str;
+					if(*fieldValue == match[1])
+					return 0;
+					else 
+					return 1;
+				}
 			}
 		}
 	}
@@ -98,12 +105,10 @@ Disk disk;
 SchemaManager schemaManager(&mainMemory, &disk);
 vector<Tuple> getDistinctTuples(vector<Tuple> tuples);
 string distinct(string tableName);
-bool whereConditionEvaluator(string whereCondition, Tuple tuple);
+bool whereConditionEvaluator(string whereCondition, Tuple tuple, bool join);
 int compareNotEqual(Tuple tuple1, Tuple tuple2);
-string crossJoin(string tableName1, string tableName2);
-void mCrossJoin(string tableName);
-void schemaBuilder(vector<string> tableNames);
-string xyz(string tableName1, string tableName2);
+string crossJoin(string tableName1, string tableName2, string whereCondition);
+string xyz(string tableName1, string tableName2, string whereCondition);
 
 void createTable(string tableName, vector<string> fieldNames, vector<string> fieldTypes) {
 
@@ -210,7 +215,7 @@ void deleteFromTable(string tableName, string whereCondition) {
 			Block *block = mainMemory.getBlock(0);
 			vector<Tuple> tuples = block->getTuples();
 			for(int j=0;j<tuples.size();j++) {
-				if(whereConditionEvaluator(whereCondition, tuples[j])) {
+				if(whereConditionEvaluator(whereCondition, tuples[j], false)) {
 					block->nullTuple(j);
 				}
 			}	
@@ -219,7 +224,7 @@ void deleteFromTable(string tableName, string whereCondition) {
 	}
 }
 
-string projection(vector<string> attributes, string tableName) {
+string projection(vector<string> attributes, string tableName, bool join) {
 	Relation *relation = schemaManager.getRelation(tableName);
 	Schema tableSchema = relation->getSchema();
 	vector<string> fieldNames;
@@ -230,7 +235,7 @@ string projection(vector<string> attributes, string tableName) {
 	for(it=attributes.begin();it!=attributes.end();it++) {
 		for(int i=0;i<tableSchema.getNumOfFields();i++) {
 			string temp = *it;
-			if(tableSchema.getFieldName(i)==getColumn(temp, tableName)) 
+			if(tableSchema.getFieldName(i)==getColumn(temp, tableName, join)) 
 			flag=i;
 		}
 		if(flag!=-1) {
@@ -284,7 +289,6 @@ bool validate(vector<string> tableNames) {
 void selectFromTable(bool dis, string attributes, string tabs, string whereCondition, string orderBy) {
 	int disk0 = disk.getDiskIOs();
 	vector<string> tableNames = split(tabs, ',');
-	vector<Table> tables;
 	vector<string> attributeNames = split(attributes, ',');
 	string tableName;
 	if(validate(tableNames)) return;
@@ -302,7 +306,7 @@ void selectFromTable(bool dis, string attributes, string tabs, string whereCondi
 					Block *block = mainMemory.getBlock(0);
 					vector<Tuple> tuples = block->getTuples();
 					for(int j=0;j<tuples.size();j++) {
-						if(whereConditionEvaluator(whereCondition, tuples[j])) {
+						if(whereConditionEvaluator(whereCondition, tuples[j], false)) {
 							cout<<tuples[j]<<endl;
 						}
 					}
@@ -314,7 +318,7 @@ void selectFromTable(bool dis, string attributes, string tabs, string whereCondi
 			schemaManager.deleteRelation(d);
 		}
 		else {
-			string tempName = projection(attributeNames, tableNames[0]);
+			string tempName = projection(attributeNames, tableNames[0], false);
 			string d;
 			relation = schemaManager.getRelation(tempName);
 			if(dis) {
@@ -331,20 +335,30 @@ void selectFromTable(bool dis, string attributes, string tabs, string whereCondi
 		vector<string>::iterator it;
 		vector<string> projections;
 		if(tableNames.size()==2) {
-			string temp = crossJoin(tableNames[0], tableNames[1]);
+			string temp = crossJoin(tableNames[0], tableNames[1], whereCondition);
 			if(attributeNames.size()==1 && attributeNames[0] =="*") {
 				Relation *relation = schemaManager.getRelation(temp);
 				cout<<*relation<<endl;
 				schemaManager.deleteRelation(temp);
 			}
+			string ptemp = projection(attributeNames,temp, true);
+			schemaManager.deleteRelation(temp);
+			string d;
+			Relation *relation = schemaManager.getRelation(ptemp);
+			if(dis) {
+				d = distinct(ptemp);
+				relation = schemaManager.getRelation(d);
+			} 
+			cout<<*relation<<endl;
+			schemaManager.deleteRelation(ptemp);
+			if(dis)
+			schemaManager.deleteRelation(d);
 		}
 		else {
-			//schemaBuilder(tableNames);
 			bool flag =true;
-			string str = crossJoin(tableNames[0],tableNames[1]);
+			string str = crossJoin(tableNames[0],tableNames[1], whereCondition);
 			for(int i=2;i<tableNames.size();i++) {
-				//mCrossJoin(tableNames[i]);
-				str = xyz(str, tableNames[i]);
+				str = xyz(str, tableNames[i], whereCondition);
 			}
 			Relation *relation = schemaManager.getRelation(str);
 			cout<<*relation<<endl;
@@ -535,16 +549,16 @@ vector<Tuple> getDistinctTuples(vector<Tuple> tuples) {
 	return temp;
 }
 
-int evaluate(string str, Tuple tuple, bool flag) {
+int evaluate(string str, Tuple tuple, bool flag, bool join) {
 	vector<string> temp = split(str,'=');//should be able to evaluate < and >
 	if(flag) {
-		if(conditionMatches(tuple,temp)==0) return 1;
+		if(conditionMatches(tuple,temp,join)==0) return 1;
 		else return 0;
 	}
-	return conditionMatches(tuple,temp); 
+	return conditionMatches(tuple,temp,join); 
 }
 
-bool whereConditionEvaluator(string str, Tuple tuple) {
+bool whereConditionEvaluator(string str, Tuple tuple, bool join) {
 	vector<string> orConditions = splitWord(str, "OR");
 	vector<map<int, bool> > values;
 	map<int, bool> subMap;
@@ -558,7 +572,7 @@ bool whereConditionEvaluator(string str, Tuple tuple) {
 				flag=true;
 				andConditions[j] = field[1];
 			}
-			subMap[j]  = evaluate(andConditions[j], tuple, flag);
+			subMap[j]  = evaluate(andConditions[j], tuple, flag, join);
 			flag = false;
 		}
 		values.push_back(subMap);
@@ -603,7 +617,7 @@ void insertIntoRelation(string tableName, Tuple tuple) {
 
 }
 
-void join(Tuple tuple1, Tuple tuple2, string tableName1, string tableName2) {
+void join(Tuple tuple1, Tuple tuple2, string tableName1, string tableName2, string whereCondition) {
 	Relation *relation = schemaManager.getRelation(tableName2+"_join");
 	Tuple tuple =relation->createTuple();
 	for(int i=0;i<tuple1.getNumOfFields();i++) {
@@ -618,10 +632,15 @@ void join(Tuple tuple1, Tuple tuple2, string tableName1, string tableName2) {
                 else                
 		tuple.setField(tableName2+"."+tuple2.getSchema().getFieldName(i), *(tuple2.getField(i).str) );
         }
+	if(whereCondition.empty())
 	insertIntoRelation(tableName2+"_join", tuple);
+	else {
+		if(whereConditionEvaluator(whereCondition, tuple, true)) 
+		insertIntoRelation(tableName2+"_join", tuple);
+	}
 }
 
-string crossJoin(string tableName1, string tableName2) {
+string crossJoin(string tableName1, string tableName2, string whereCondition) {
 	string small,big;
 	if(schemaManager.getRelation(tableName1)->getNumOfBlocks()<=schemaManager.getRelation(tableName2)->getNumOfBlocks()) {
 		small = tableName1;
@@ -648,6 +667,22 @@ string crossJoin(string tableName1, string tableName2) {
 	Relation *relation1 = schemaManager.getRelation(small);
 	Relation *relation2 = schemaManager.getRelation(big);
 	int size1 = relation1->getNumOfBlocks(), size2 = relation2->getNumOfBlocks();
+	if(size1<=10) {
+		relation1->getBlocks(0,0,size1);
+		vector<Tuple> tuples = mainMemory.getTuples(0,size1);
+		for(int x=0;x<tuples.size();x++) {
+			for(int i=0;i<size2;i++) {
+                                 relation2->getBlock(i,1);
+                                 Block *block = mainMemory.getBlock(1);
+                                 for(int j=0;j<block->getNumTuples();j++) {
+                                         Tuple tuple2 = block->getTuple(j);
+                                         join(tuples[x], tuple2, small, big, whereCondition);
+                                 }
+                         }
+
+		}
+	}	
+	else {
 	for(int x=0;x<size1;x++) {
 		relation1->getBlock(x,0);
 		Block *block0 = mainMemory.getBlock(0);
@@ -658,16 +693,17 @@ string crossJoin(string tableName1, string tableName2) {
 				Block *block = mainMemory.getBlock(1);
 				for(int j=0;j<block->getNumTuples();j++) {
 					Tuple tuple2 = block->getTuple(j);
-					join(tuple1, tuple2, small, big);
+					join(tuple1, tuple2, small, big, whereCondition);
 				}
 			}
 		}
+	}
 	}
 	string rt = big+"_join";
 	return rt;
 }
 
-void joinxyz(Tuple tuple1, Tuple tuple2, string tableName2) {
+void joinxyz(Tuple tuple1, Tuple tuple2, string tableName2, string whereCondition) {
         Relation *relation = schemaManager.getRelation(tableName2+"_join");
         Tuple tuple =relation->createTuple();
         for(int i=0;i<tuple1.getNumOfFields();i++) {
@@ -682,10 +718,15 @@ void joinxyz(Tuple tuple1, Tuple tuple2, string tableName2) {
                 else
                 tuple.setField(tableName2+"."+tuple2.getSchema().getFieldName(i), *(tuple2.getField(i).str) );
         }
+	if(whereCondition.empty()) 
         insertIntoRelation(tableName2+"_join", tuple);
+	else {
+                 if(whereConditionEvaluator(whereCondition, tuple, true))
+                 insertIntoRelation(tableName2+"_join", tuple);
+         }
 }
 
-string xyz(string tableName1, string tableName2) {
+string xyz(string tableName1, string tableName2, string whereCondition) {
 	Schema schema1 = schemaManager.getSchema(tableName1);
         Schema schema2 = schemaManager.getSchema(tableName2);
         vector<string> fieldNames;
@@ -714,7 +755,7 @@ string xyz(string tableName1, string tableName2) {
                                 Block *block = mainMemory.getBlock(1);
                                 for(int j=0;j<block->getNumTuples();j++) {
                                         Tuple tuple2 = block->getTuple(j);
-                                        joinxyz(tuple1, tuple2, tableName2);
+                                        joinxyz(tuple1, tuple2, tableName2, whereCondition);
                                 }
                         }
                 }
