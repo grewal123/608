@@ -4,38 +4,47 @@
 #include<vector>
 #include<algorithm>
 #include<sstream>
-#include <string.h>
+#include<cstddef>
+
 using namespace std;
 
 extern void createTable(string tableName, vector<string> fieldNames, vector<string> fieldTypes);
-
 extern void dropTable(string tableName);
-
 extern void insertIntoTable(string tableName, vector<string> fieldNames, vector<string> fieldValues);
-
-extern void deleteFromTable(string tableName);
-
-extern void selectFromTable(bool distinct, string columnNames, string tableName);
-
-extern void deleteTuplesFromTable(string tableName,vector<string> tokens);
-
-extern void deleteTuplesFromTable(string tableName,vector<string> tokens1,vector<string> token2);
-
-extern vector<string>  tokenize(string condition);
-
-
+extern void deleteFromTable(string tableName, string whereCondition);
+extern void selectFromTable(bool distinct, string columnNames, string tableNames, string whereCondition, string orderBy);
+extern string removeSpaces(string str);
 
 vector<string> split(string str, char delimiter) {
   vector<string> internal;
   stringstream ss(str); 
   string token;
-  
   while(getline(ss, token, delimiter)) {
-    internal.push_back(token);
+    internal.push_back(removeSpaces(token));
   }
-  
   return internal;
 }
+
+string trimSpaces(string input) {
+	string str = input;
+	string whiteSpaces = ("\t\f\n\v\r");
+	str.erase(str.find_last_not_of(whiteSpaces)+1);
+	str.erase(0, str.find_first_not_of(whiteSpaces));
+	return str;
+}
+
+vector<string> splitWord(string str, string splitter) {
+	vector<string> internal;
+	size_t index;
+	while((index=str.find(splitter))!=string::npos) {
+		internal.push_back(trimSpaces(str.substr(0,index)));
+		str = str.substr(index+splitter.size(), str.size());
+	}
+	internal.push_back(trimSpaces(str));
+	return internal;
+	
+}
+
 void runQuery(string query);
 
 int main() {
@@ -65,13 +74,9 @@ regex fieldPattern(fieldQuery, regex_constants::icase);
 dropQuery = "^drop table ([a-zA-Z0-9]*)";
 regex dropPattern(dropQuery, regex_constants::icase);
 insertQuery = "^insert into ([a-zA-Z0-9]*)\\ *[(](([a-zA-Z0-9]*\\,*\\ *)*)[)]\\ *values\\ *[(]((.*)|select .*)[)]";
-//insertQuery = "^insert into ([a-zA-Z0-9]*)\\ *[(](([a-zA-Z0-9]*\\,*\\ *)*)[)]\\ *values\\ *[(](([[:alnum:], \"]*\\,*\\ *)*|select .*)[)]";
 regex insertPattern(insertQuery, regex_constants::icase);
 deleteQuery = "^delete from ([a-zA-Z0-9]*)\\ *((where) (.*))*";
 regex deletePattern(deleteQuery, regex_constants::icase);
-//conditionQuery for conditions in delete query
-string conditionQuery = "((.*))\\ *(and)\\ *(.*)";
-regex conditionPattern(conditionQuery, regex_constants::icase);
 //select queries
 selectQuery = "^select (.*)";
 selectQuery0 = "^select (.*) from (.*) where (.*) order by (.*)";
@@ -120,7 +125,6 @@ else if(regex_match(query.c_str(),attributes,dropPattern)) {
 
 //insert into statement
 else if(regex_match(query.c_str(), attributes, insertPattern)) {
-	cout<<"insert statment"<<endl;
 	tableName = attributes[1];
 	string attributeList = attributes[2];
 	string valueList = attributes[4];
@@ -144,32 +148,8 @@ else if(regex_match(query.c_str(), attributes, insertPattern)) {
 //delete from statment
 else if(regex_match(query.c_str(),attributes,deletePattern)) {
 	tableName = attributes[1];
-	
-	if(attributes[3]=="WHERE")
-	{
-		//dividing the string after "where" in tokens
-		//seperated by = and push them to vector of strings
-		//tokens[0] is field name 
-		//token[1]  is field value
-		string str = attributes[4];
-		if(regex_match(str.c_str(),attributes,conditionPattern))
-		{
-			string condition1 = attributes[2];
-			string condition2 = attributes[4];
-			vector<string> tokens1,tokens2;
-			tokens1 = tokenize(condition1);
-			tokens2 = tokenize(condition2);
-			deleteTuplesFromTable(tableName,tokens1,tokens2);
-		
-		}
-		else
-		{
-	     	vector<string> tokens = tokenize(str);
-	     	deleteTuplesFromTable(tableName,tokens);
-	    }
-		return;
-	}
-	deleteFromTable(tableName);
+	string whereCondition = attributes[4];
+	deleteFromTable(tableName, whereCondition);
 	return;
 }
 
@@ -177,18 +157,39 @@ else if(regex_match(query.c_str(),attributes,deletePattern)) {
 else if(regex_match(query.c_str(),selectPattern)) {
 
 	if(regex_match(query.c_str(), attributes, selectPattern0)) {
+		string temp = attributes[1];
+                if(regex_match(temp.c_str(), fields, distinctPattern)) {
+                        distinct = true;
+                        temp = fields[1];
+                }
+		selectFromTable(distinct, temp, attributes[2], attributes[3], attributes[4]);
+		return;
 	}
 	else if(regex_match(query.c_str(), attributes, selectPattern1)) {
-        }
+        	string temp = attributes[1];
+                if(regex_match(temp.c_str(), fields, distinctPattern)) {
+                        distinct = true;
+                        temp = fields[1];
+                }
+		selectFromTable(distinct, temp, attributes[2], "", attributes[3]);
+		return;
+	}
 	else if(regex_match(query.c_str(), attributes, selectPattern2)) {
-        }
+		string temp = attributes[1];
+                if(regex_match(temp.c_str(), fields, distinctPattern)) {
+                        distinct = true;
+                        temp = fields[1];
+                }
+		selectFromTable(distinct, temp, attributes[2], attributes[3], "");
+       		return;
+	 }
 	else if(regex_match(query.c_str(), attributes, selectPattern3)) {
 		string temp = attributes[1];
 		if(regex_match(temp.c_str(), fields, distinctPattern)) {
 			distinct = true;
 			temp = fields[1];	
 		}		
-        	selectFromTable(distinct, temp, attributes[2]);
+        	selectFromTable(distinct, temp, attributes[2], "", "");
 		return;
 	}
 	else {
