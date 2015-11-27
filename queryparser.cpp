@@ -27,7 +27,7 @@ vector<string> split(string str, char delimiter) {
 
 string trimSpaces(string input) {
 	string str = input;
-	string whiteSpaces = ("\t\f\n\v\r");
+	string whiteSpaces = (" \t\f\n\v\r");
 	str.erase(str.find_last_not_of(whiteSpaces)+1);
 	str.erase(0, str.find_first_not_of(whiteSpaces));
 	return str;
